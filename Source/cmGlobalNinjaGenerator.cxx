@@ -24,6 +24,8 @@ const char* cmGlobalNinjaGenerator::NINJA_BUILD_FILE = "build.ninja";
 const char* cmGlobalNinjaGenerator::NINJA_RULES_FILE = "rules.ninja";
 const char* cmGlobalNinjaGenerator::INDENT = "  ";
 
+#define DEPFILE "DEPFILE"
+
 void cmGlobalNinjaGenerator::Indent(std::ostream& os, int count)
 {
   for(int i = 0; i < count; ++i)
@@ -235,10 +237,26 @@ void cmGlobalNinjaGenerator::AddCustomCommandRule()
                 "$COMMAND",
                 "$DESC",
                 "Rule for running custom commands.",
-                /*depfile*/ "",
+                /*depfile*/ "$"DEPFILE,
                 /*rspfile*/ "",
                 /*rspcontent*/ "",
                 /*restat*/ true);
+}
+
+std::string getDepFile (const std::string& description) {
+  size_t p = description.find(DEPFILE"=");
+  if (p != std::string::npos)
+    return description.substr (p + strlen(DEPFILE"="));
+  else 
+    return "";    
+}
+
+std::string removeDepFile (const std::string& description) {
+  size_t p = description.find(DEPFILE"=");
+  if (p != std::string::npos)
+    return description.substr (0, p);
+  else 
+    return description;
 }
 
 void
@@ -260,7 +278,15 @@ cmGlobalNinjaGenerator::WriteCustomCommandBuild(const std::string& command,
 
   cmNinjaVars vars;
   vars["COMMAND"] = cmd;
-  vars["DESC"] = EncodeLiteral(description);
+  vars["DESC"] = EncodeLiteral(removeDepFile(description));
+
+  // check if a depfile is specified in the description string, if yes
+  // addd it as a variable. The depfile needs to be specified at the end of
+  // the description in format "DESCRIPTION DEPFILE=path/to/depfile.d"
+  std::string depFile = getDepFile (description);
+  if (depFile.length() > 0) {
+    vars[DEPFILE] = depFile;
+  }
 
   this->WriteBuild(*this->BuildFileStream,
                    comment,
